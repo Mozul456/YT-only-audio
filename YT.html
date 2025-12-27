@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reproductor de Audio YT (Solo Audio)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            text-align: center;
+            padding: 50px;
+        }
+        #container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        input[type="text"] {
+            width: 80%;
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #player-container {
+            margin-top: 30px;
+            position: relative;
+        }
+        #youtube-player {
+            width: 300px;
+            height: 200px;
+            background: black; /* Fondo negro para "ocultar" el video */
+            position: absolute;
+            top: -9999px; /* Lo sacamos de la vista */
+            left: -9999px;
+        }
+        #controls {
+            margin-top: 20px;
+        }
+        #title {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        #progress-container {
+            width: 100%;
+            background: #ddd;
+            height: 10px;
+            border-radius: 5px;
+            margin: 20px 0;
+            cursor: pointer;
+        }
+        #progress {
+            width: 0%;
+            background: #007bff;
+            height: 100%;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Reproductor de Audio YT</h1>
+        <p></p>
+        <input type="text" id="url-input" placeholder="Pega aquí el enlace de YouTube">
+        <button onclick="cargarVideo()">Reproducir Audio</button>
+
+        <div id="player-container">
+            <div id="title">Sin canción cargada</div>
+            <div id="progress-container" onclick="seek(event)">
+                <div id="progress"></div>
+            </div>
+            <div id="controls">
+                <button onclick="togglePlay()">Play / Pausa</button>
+                <label>Volumen: <input type="range" id="volume" min="0" max="100" value="100" onchange="setVolume()"></label>
+            </div>
+        </div>
+
+        <div id="youtube-player"></div>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script>
+        let player;
+        let videoId = '';
+
+        // Función llamada cuando la API de YouTube está lista
+        function onYouTubeIframeAPIReady() {}
+
+        // Extraer el ID del video de YouTube desde la URL
+        function extraerVideoId(url) {
+            const regex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
+            const match = url.match(regex);
+            return match ? match[1] : null;
+        }
+
+        // Cargar el video al reproductor
+        function cargarVideo() {
+            const url = document.getElementById('url-input').value.trim();
+            videoId = extraerVideoId(url);
+
+            if (!videoId) {
+                alert('Enlace de YouTube inválido.');
+                return;
+            }
+
+            if (player) {
+                player.destroy(); // Destruir el reproductor anterior si existe
+            }
+
+            // Crear un nuevo reproductor de YouTube
+            player = new YT.Player('youtube-player', {
+                height: '200',
+                width: '300',
+                videoId: videoId,
+                playerVars: {
+                    autoplay: 1,  // Inicia el video automáticamente
+                    mute: 1,      // Empieza con el sonido en mute para asegurar autoplay
+                    controls: 0,  // Sin controles de YouTube
+                    modestbranding: 1,  // Sin branding de YouTube
+                    rel: 0  // No mostrar videos relacionados al final
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        // Cuando el reproductor esté listo, comenzamos a reproducir el audio
+        function onPlayerReady(event) {
+            player.unMute();  // Desmuteamos el audio
+            player.setVolume(100);  // Ajustamos el volumen al máximo
+            document.getElementById('title').innerText = 'Reproduciendo audio...';
+            actualizarProgreso();  // Actualizamos el progreso del audio
+        }
+
+        // Cambiar el título cuando el video termina
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                document.getElementById('title').innerText = 'Canción terminada';
+            }
+        }
+
+        // Función para alternar entre play y pausa
+        function togglePlay() {
+            if (player) {
+                if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+                    player.pauseVideo();
+                } else {
+                    player.playVideo();
+                }
+            }
+        }
+
+        // Cambiar el volumen
+        function setVolume() {
+            const vol = document.getElementById('volume').value;
+            if (player) player.setVolume(vol);
+        }
+
+        // Actualizar el progreso del video
+        function actualizarProgreso() {
+            if (player && player.getDuration) {
+                const current = player.getCurrentTime();
+                const duration = player.getDuration();
+                if (duration > 0) {
+                    const percent = (current / duration) * 100;
+                    document.getElementById('progress').style.width = percent + '%';
+                }
+            }
+            requestAnimationFrame(actualizarProgreso); // Llamada repetida para actualizar el progreso
+        }
+
+        // Función para saltar a un punto específico del video
+        function seek(event) {
+            if (player && player.getDuration) {
+                const rect = event.target.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const width = rect.width;
+                const percent = x / width;
+                const duration = player.getDuration();
+                player.seekTo(percent * duration);
+            }
+        }
+    </script>
+</body>
+</html>
